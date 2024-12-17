@@ -4,6 +4,7 @@ import random
 import json
 import pandas as pd
 import requests
+from io import BytesIO
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
@@ -12,6 +13,10 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse
+from PIL import Image
+import cv2
+import numpy as np
 
 # Create dataset
 
@@ -38,34 +43,87 @@ class scrapeSites:
         )
         options.add_argument(f"user-agent={custom_user_agent}")
         self.driver = webdriver.Chrome(options=options)
-
-
-
-
-
-    # Extract features such as color (using OpenCV) or texture descriptors.
-    def extract_image_features(self, image):
-        return
     
-    # Resize images for uniformity
-    def resize_image(self, img_name):
-        return
+    def euclidean_distance_colors(self, color1, color2):
+        return np.sqrt(np.sum((np.array(color1) - np.array(color2)) ** 2))
+    
+    def get_closest_color(self, rgb_value, color_keywords_rgb):
+        min_distance = float('inf')
+        closest_color = None
 
+        for color_name, color_rgb in color_keywords_rgb.items():
+            dist = self.euclidean_distance_colors(rgb_value, color_rgb)
+            if dist < min_distance:
+                min_distance = dist
+                closest_color = color_name
+        return closest_color
+    
+    def map_colors(self, centers, color_keywords_rgb):
+        color_names = []
+        for center in centers:
+            closest_color = self.get_closest_color(center, color_keywords_rgb)
+            color_names.append(closest_color)
+        return color_names
+    
+    def extract_color(self, image, num_colors):
+        """
+        Enhanced color extraction with more detailed color shades and variations
+        """
+        color_keywords_rgb = {
+            'black': [0, 0, 0],
+            'white': [255, 255, 255],
+            'red': [255, 0, 0],
+            'blue': [0, 0, 255],
+            'green': [0, 255, 0],
+            'yellow': [255, 255, 0],
+            'purple': [128, 0, 128],
+            'pink': [255, 182, 193],
+            'gray': [128, 128, 128],
+            'brown': [139, 69, 19],
+            'orange': [255, 165, 0]
+        }
+        
+        pixels = image.reshape((-1, 3))  # Flatten image pixels into a 2D array
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+        _, labels, centers = cv2.kmeans(pixels.astype(np.float32), num_colors, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
 
+        centers = np.uint8(centers)
+        # Generate a color palette for visualization
+        palette = np.zeros((50, 300, 3), np.uint8)
+        for i in range(num_colors):
+            x1 = i * 50
+            x2 = (i + 1) * 50
+            palette[:, x1:x2] = centers[i]
+    
+        # Map extracted color centroids to predefined categories
+        mapped_colors = self.map_colors(centers, color_keywords_rgb)
+        return mapped_colors, palette
 
+    
+    # Extract features such as color.
+    def extract_image_color(self, image):
+        image = cv2.imread(image)
+        img_colors, palette = self.extract_color(image, 5)
 
-
-
-    def download_image(self, base_url, img_src, img_name):
+    
+    # Resize images for uniformity, then extract features or texture descriptors
+    def download_image(self, base_url, img_src):
         try:
+            parsed_url = urlparse(base_url)
+            website_folder = parsed_url.netloc.replace('.','_')
+            os.makedirs(f'images/{website_folder}', exist_ok=True)
+
             full_url = requests.compat.urljoin(base_url, img_src)
             response = requests.get(full_url, stream=True)
             if response.status_code == 200:
-                img_path = os.path.join(self.image_dir, img_name)
-                with open(img_path, "wb") as file:
-                    file.write(response.content)
-                print(f"Image saved: {img_path}")
-                return img_path
+                img = Image.open(BytesIO(response.content))
+                if img.mode in ['RGBA', 'P']:
+                    img = img.convert('RGB')
+                img = img.resize((256, 256))
+                file_path = f'images/{website_folder}/{self.count}.jpg'
+                img.save(file_path, 'JPEG', quality=95)
+                print(f"Image saved from: {base_url} at {file_path}")
+                return file_path
             else:
                 print(f"Failed to download image: {full_url}")
                 return None
@@ -86,10 +144,9 @@ class scrapeSites:
             for img in images:
                 img_src = img.get("src")
                 img_alt = img.get("alt", "").strip() or "No description available"
-                img_name = f"product_{self.count}.jpg"
 
                 if img_src:
-                    img_path = self.download_image(website, img_src, img_name)
+                    img_path = self.download_image(website, img_src)
                     if img_path:
                         descriptions.append({"image_file": img_path, "description": img_alt})
                     self.count += 1
@@ -143,16 +200,3 @@ if __name__ == "__main__":
     scraper = scrapeSites(websites)
     scraper.scrape_all()
     scraper.close()
-
-# Preprocess data
-# Resize images for uniformity, then extract features or texture descriptors
-# Create labeled datasets with classes for different features
-
-
-# Model training
-# Use TensorFlow and a pretrained CNN
-# Finetune model based on dataset outputs (desired features)
-# Train separate models for specific tasks such as color extraction, occasion, and weather.
-
-# Deployment
-# Saved the trained me and deploy on a cloud service for real-time API calls that users can make on the web app.
