@@ -162,10 +162,16 @@ class ImageClassifier :
         keypoint_output = layers.Dense(42, activation="sigmoid") # Dense because we are predicting (x,y) coordinates, 42 numbers (21 keypoints, each having a x and y coordinate)
         
         # Multi(Shape, fabric, color), densenet121
-        classifcation_model = densenet.build_densenet(backbone_output)
-        shape_output = layers.Dense(12, activation="sigmoid")
-        fabric_output = layers.Dense(4, activation="sigmoid")
-        color_output = layers.Dense(4, activation="sigmoid")
+        classifcation_model = tf.keras.applications.DenseNet121(
+            include_top = False, 
+            weights='imagenet', 
+            input_tensor = None, 
+            input_shape = (self.img_height, self.img_width, 3),
+            classes = 3
+        )
+        shape_output = layers.Dense(12, activation="sigmoid") # Dense
+        fabric_output = layers.Dense(4, activation="sigmoid") # Dense
+        color_output = layers.Dense(4, activation="sigmoid") # Dense
 
         model = Model(
             inputs = backbone.input,
