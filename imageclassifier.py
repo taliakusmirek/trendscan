@@ -1,4 +1,7 @@
 import imagerecognition
+import unet
+import hourglass
+import densenet
 import tensorflow as tf
 import keras
 from keras import datasets, layers, models, Model
@@ -32,6 +35,9 @@ class ImageClassifier :
         labels_shape_dir = "/DeepFashion-MultiModal/labels/shape/shape_anno_all.txt"
         labels_fabric_dir = "/DeepFashion-MultiModal/labels/texture/fabric_ann.txt"
         labels_color_dir = "/DeepFashion-MultiModal/labels/texture/pattern_ann.txt"
+
+        # Create lists to store 
+        self.loaded_images, self.loaded_parsing, self.loaded_keypoints, self.loaded_shape, self.loaded_fabric, self.loaded_color = []
 
         # Load all masks so we have all the tensors of each mask of every image
         keypoints = {} # Each array is 21 values long
@@ -69,8 +75,6 @@ class ImageClassifier :
             print(f"Color Label of {image}:", color[image])
             print("--------------------------------------------------")
 
-
-
             # Preprocess data
             # 1. Resize masks and images to a fixed size (e.g., 256x256).
             print("Resizing image and parsing mask...")
@@ -82,15 +86,134 @@ class ImageClassifier :
             print("--------------------------------------------------")
             # 2. Normalize pixel values.
             image = image.astype('float32') / 255.0 # Normalize each image pixel to [0, 1]
-            parsing_mask_resized = parsing_mask_resized.astype('float32') / 255.0  # Normalize mask to [0, 1]
+            parsing_mask= parsing_mask_resized.astype('float32') / 255.0  # Normalize mask to [0, 1]
+
+            # Add all values to their lists, and then turn the list into a numpy array
+            self.loaded_images.append(image)
+            self.loaded_parsing(parsing_mask)
+            self.loaded_keypoints(keypoints[image])
+            self.loaded_shape(shape[image])
+            self.loaded_fabric(fabric[image])
+            self.loaded_color(color[image])
+
+            self.loaded_images = np.array(self.loaded_images)
+            self.loaded_parsing = np.array(self.loaded_parsing)
+            self.loaded_keypoints = np.array(self.loaded_keypoints)
+            self.loaded_shape = np.array(self.loaded_shape)
+            self.loaded_fabric = np.array(self.loaded_fabric)
+            self.loaded_color = np.array(self.loaded_color)
+
+            return { # Return dictionary of everything from the dataset, the keys being strings that are the feature labels
+                'images' : self.loaded_images,
+                'parsings' : self.loaded_parsing,
+                'keypoints' : self.loaded_keypoints,
+                'shapes' : self.loaded_shape,
+                'fabrics' : self.loaded_fabric,
+                'colors' : self.loaded_color,
+            }
 
 
-    def train(self, image):
+    def train(self, batch_size = 32, epochs = 300, learning_rate=0.01):
         # For parsing masks, train a semantic segmentation model (e.g., U-Net, DeepLabV3+).
         # For keypoints, use a regression model to predict keypoint coordinates.
         # For shape, fabric, and color labels, train classification models.
-        pass
+
+        # Split dataset into training and testing, generic 80-20 split
+        # Note, data is preprocessed and normalized in the load function
+        dataset = self.load_dfds()
+        split = int(len(dataset["images"]) * 0.8)
+        train_data = tf.data.Dataset.from_tensor_slices({ # Take 80% of dataset by querying dictionary via key which is string of corresponding feature
+                'images' : dataset['images'][:split],
+                'parsings' : dataset['parsings'][:split],
+                'keypoints' : dataset['keypoints'][:split],
+                'shapes' : dataset['shapes'][:split],
+                'fabrics' : dataset['fabrics'][:split],
+                'colors' : dataset['colors'][:split],
+        })
+
+        val_data = tf.data.Dataset.from_tensor_slices({ # Take 80% of dataset by querying dictionary via key which is string of corresponding feature
+                'images' : dataset['images'][split:],
+                'parsings' : dataset['parsings'][split:],
+                'keypoints' : dataset['keypoints'][split:],
+                'shapes' : dataset['shapes'][split:],
+                'fabrics' : dataset['fabrics'][split:],
+                'colors' : dataset['colors'][split:],
+        })
         
+        # Preprocess training and validation datasets
+        train_data = train_data.shuffle(buffer_size=1000).batch(batch_size).prefetch(buffer_size=tf.data.AUTOTUNE) # Shuffle to prevent biased splits
+        val_data = train_data.batch(batch_size).prefetch(buffer_size=tf.data.AUTOTUNE)
+        
+
+        # Building model...
+
+
+
+        # Backbone is resnet50
+        backbone = self.base_model
+        backbone_output = backbone.output
+
+        # Parsing mask, u-net decoder with resnet50
+        parsing_model = unet.build_unet(backbone_output)
+        parsing_output = layers.Conv2D(1, activation="softmax") # Conv2D because we are predicting pixels
+        
+        # Keypoint mask, stacked hourglass network
+        keypoint_model = hourglass.build_hourglass(backbone_output)
+        keypoint_output = layers.Dense(42, activation="sigmoid") # Dense because we are predicting (x,y) coordinates, 42 numbers (21 keypoints, each having a x and y coordinate)
+        
+        # Multi(Shape, fabric, color), densenet121
+        classifcation_model = densenet.build_densenet(backbone_output)
+        shape_output = layers.Dense(12, activation="sigmoid")
+        fabric_output = layers.Dense(4, activation="sigmoid")
+        color_output = layers.Dense(4, activation="sigmoid")
+
+        model = Model(
+            inputs = backbone.input,
+            outputs = [
+                parsing_output,
+                keypoint_output,
+                shape_output,
+                fabric_output,
+                color_output,
+            ]
+        )
+
+        # Define loss functions...
+        loss_functions = {
+            'parsing_output' : unet.dice_coefficient,
+            'keypoint_output' : tf.keras.losses.MeanSquaredError(),
+            'shape_output' : tf.keras.losses.BinaryCrossentropy(),
+            'fabric_output' : tf.keras.losses.BinaryCrossentropy(),
+            'color_output' : tf.keras.losses.BinaryCrossentropy(),
+        }
+
+        # Define loss weights...
+        loss_weights = {
+            'parsing_output' : 1.0,
+            'keypoint_output' : 0.5,
+            'shape_output' : 0.3,
+            'fabric_output' : 0.3,
+            'color_output' : 0.3,
+        }
+
+        # Compile model with loss functions
+        model = model.compile(
+            optimizer=keras.optimizers.Adam(),
+            loss=loss_functions,
+            loss_weights= loss_weights,
+            metrics = {
+            'parsing_output' : ,
+            'keypoint_output' : ,
+            'shape_output' : ,
+            'fabric_output' : ,
+            'color_output' : ,
+        })
+
+        # Run, predict, see performance, via a epochs training loop
+        # Referene: https://www.tensorflow.org/guide/core/quickstart_core
+
+
+
     def clothing_type(self, image):
         pass
         
