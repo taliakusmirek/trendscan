@@ -280,7 +280,37 @@ class FashionNN :
 
         # Run, predict, see performance, via a epochs training loop
         # Referene: https://www.tensorflow.org/guide/core/quickstart_core
+        def training_loop(images, targets):
+            # Calculate loss of each input
+            with tf.GradientTape() as tape:
+                predictions = self.call(images)
+                # Calculate loss of each input
+                parsing_loss = loss_functions['parsing_output'](targets['parsings'], predictions['parsing_output'])
+                shape_loss = loss_functions['shape_output'](targets['shapes'], predictions['shape_output'])
+                fabric_loss = loss_functions['fabric_output'](targets['fabrics'], predictions['fabric_output'])
+                color_loss = loss_functions['color_output'](targets['colors'],predictions['color_output'])
+                # Calculate total weight loss
+                total_loss = ((loss_weights['parsing_output']*parsing_loss) +
+                              (loss_weights['shape_output']*shape_loss) +
+                              (loss_weights['fabric_output']*fabric_loss) +
+                              (loss_weights['color_output']*color_loss))
+                # Update weights based on loss of gradient descent iteration
+                grads = tape.gradient(total_loss, self.trainable_variables)
+                for g, v in zip(grads, self.trainable_variables):
+                    v.assign_sub(learning_rate * g)
+                # Update loss metrics, use update_state() to measure the metrics (mean, auc, accuracy) and stores them to be retrieved later
+                train_loss.update_state(total_loss)
+                parsing_accuracy.update_state(targets['parsings'], predictions['parsing_output'])
+                shape_accuracy.update_state(targets['shapes'], predictions['shape_output'])
+                fabric_accuracy.update_state(targets['fabrics'], predictions['fabric_output'])
+                color_accuracy.update_state(targets['colors'], predictions['color_output'])
 
+                return total_loss
+            
+        def validation_of_training(images, targets):
+            pass
+                                    
+            
         def predict(self, image):
             pass
 
