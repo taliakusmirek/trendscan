@@ -1,14 +1,7 @@
-import imagerecognition
-import unet
-import hourglass
-import densenet
 import tensorflow as tf
-import keras
-from keras import datasets, layers, models, Model
-from keras import ResNet50
-from keras import preprocess_input, decode_predictions
-import matplotlib.pyplot as plt
-import pathlib
+from tensorflow.keras import datasets, layers, models, Model
+from tensorflow.keras.applications import ResNet50
+from tensorflow.keras.applications.resnet50 import preprocess_input, decode_predictions
 import numpy as np
 from PIL import Image
 import os
@@ -38,6 +31,10 @@ class FashionNN :
         super(FashionNN, self).__init__()
         self.img_height = img_height
         self.img_width = img_width
+        if num_parsing_classes is not None:
+            self.num_parsing_classes = num_parsing_classes
+        else:
+            self.num_parsing_classes = 21
         self.backbone = ResNet50(
             include_top = False,
             weights = "imagenet", # Default pre-trained dataset from Keras
@@ -132,11 +129,11 @@ class FashionNN :
     
 
     def load_dfds(self):
-        image_dir = "/DeepFashion-MultiModal/images"
-        parsing_dir = "/DeepFashion-MultiModal/segm"
-        labels_shape_dir = "/DeepFashion-MultiModal/labels/shape/shape_anno_all.txt"
-        labels_fabric_dir = "/DeepFashion-MultiModal/labels/texture/fabric_ann.txt"
-        labels_color_dir = "/DeepFashion-MultiModal/labels/texture/pattern_ann.txt"
+        image_dir = "DeepFashion-MultiModal/images"
+        parsing_dir = "DeepFashion-MultiModal/segm"
+        labels_shape_dir = "DeepFashion-MultiModal/labels/shape/shape_anno_all.txt"
+        labels_fabric_dir = "DeepFashion-MultiModal/labels/texture/fabric_ann.txt"
+        labels_color_dir = "DeepFashion-MultiModal/labels/texture/pattern_ann.txt"
 
         # Create lists to store 
         self.loaded_images = [] 
@@ -149,53 +146,71 @@ class FashionNN :
         shape = {} # Each array is 12 values long: <img_name> <shape_0> <shape_1> ... <shape_11>
         with open(labels_shape_dir, 'r') as f:
             for line in f:
-                parts = line.strip.split() # splits each line on spaces
+                parts = line.strip().split() # splits each line on spaces
                 shape[parts[0]] = parts[1:] # Key for the dictionary is first element of each line, which is the image name, its attributes being everything after the first element
             
         fabric = {} # Each array is 4 values long: <img_name> <upper_fabric> <lower_fabric> <outer_fabric>
         with open(labels_fabric_dir, 'r') as f:
             for line in f:
-                parts = line.strip.split() # splits each line on spaces
+                parts = line.strip().split() # splits each line on spaces
                 fabric[parts[0]] = parts[1:] # Key for the dictionary is first element of each line, which is the image name, its attributes being everything after the first element
 
         color = {} # Each array is 4 values long: <img_name> <upper_color> <lower_color> <outer_color>
         with open(labels_color_dir, 'r') as f:
             for line in f:
-                parts = line.strip.split() # splits each line on spaces
+                parts = line.strip().split() # splits each line on spaces
                 color[parts[0]] = parts[1:] # Key for the dictionary is first element of each line, which is the image name, its attributes being everything after the first element
            
-        for image in os.listdir(image_dir): # Check all arrays are matching to their image correct
-            print("--------------------------------------------------")
-            parsing_mask = np.array(Image.open(os.path.join(parsing_dir, image))) # Default parsing tensor, unique values tell us the clothing type
-            clothing_type = np.unique(parsing_mask) # Tell us the type of clothing
-            print(f"Unique Parsing of {image}:", clothing_type.shape)
-            print(f"Shape Label of {image}:", shape[image])
-            print(f"Fabric Label of {image}:", fabric[image])
-            print(f"Color Label of {image}:", color[image])
-            print("--------------------------------------------------")
+        for image in os.listdir(image_dir):  # Check all images in the directory
+            image_path = os.path.join(image_dir, image)
+            parsing_mask_path = os.path.join(parsing_dir, image)
 
-            # Preprocess data
-            # 1. Resize masks and images to a fixed size (e.g., 256x256).
-            print("Resizing image and parsing mask...")
             print("--------------------------------------------------")
-            image = Image.open(os.path.join(image_dir, image))
-            image = image.resize((self.img_height, self.img_width))
-            image = np.array(image)
-            parsing_mask_resized = Image.open(parsing_mask)
-            parsing_mask_resized = parsing_mask_resized.resize((self.img_width, self.img_height), Image.NEAREST)
-            print(f"Resized image shape:", image)
-            print(f"Resized parsed mask: ", parsing_mask_resized)
-            print("--------------------------------------------------")
-            # 2. Normalize pixel values.
-            image = image.astype('float32') / 255.0 # Normalize each image pixel to [0, 1]
-            parsing_mask= parsing_mask_resized.astype('float32') / 255.0  # Normalize mask to [0, 1]
+            try:
+                # Load the parsing mask and check its unique values for clothing type
+                parsing_mask = np.array(Image.open(parsing_mask_path))  # Default parsing tensor
+                clothing_type = np.unique(parsing_mask)  # Unique values tell us the type of clothing
+                print(f"Unique Parsing of {image}:", clothing_type.shape)
+        
+                # Check if the corresponding labels exist for the current image
+                print(f"Shape Label of {image}:", shape.get(image, "N/A"))
+                print(f"Fabric Label of {image}:", fabric.get(image, "N/A"))
+                print(f"Color Label of {image}:", color.get(image, "N/A"))
+                print("--------------------------------------------------")
 
-            # Add all values to their lists, and then turn the list into a numpy array
-            self.loaded_images.append(image)
-            self.loaded_parsing.append(parsing_mask)
-            self.loaded_shape.append(shape[image])
-            self.loaded_fabric.append(fabric[image])
-            self.loaded_color.append(color[image])
+                # Preprocess the image and mask
+                print("Resizing image and parsing mask...")
+                print("--------------------------------------------------")
+        
+                # Open and resize the image
+                image = Image.open(image_path)
+                image = image.resize((self.img_height, self.img_width))
+                image = np.array(image)
+        
+                # Open and resize the parsing mask
+                parsing_mask_resized = Image.open(parsing_mask_path)
+                parsing_mask_resized = parsing_mask_resized.resize((self.img_width, self.img_height), Image.NEAREST)
+                print(f"Resized image shape:", image.shape)
+                print(f"Resized parsed mask shape:", parsing_mask_resized.size)
+                print("--------------------------------------------------")
+        
+                # Normalize the pixel values
+                image = image.astype('float32') / 255.0  # Normalize each image pixel to [0, 1]
+                parsing_mask = np.array(parsing_mask_resized).astype('float32') / 255.0  # Normalize mask to [0, 1]
+
+                # Add all values to their lists
+                self.loaded_images.append(image)
+                self.loaded_parsing.append(parsing_mask)
+                self.loaded_shape.append(shape.get(image, None))  # Use None if not found
+                self.loaded_fabric.append(fabric.get(image, None))  # Use None if not found
+                self.loaded_color.append(color.get(image, None))  # Use None if not found
+
+            except FileNotFoundError as e:
+                print(f"File not found for {image}: {e}. Skipping this image.")
+                continue  # Skip to the next image if the file is missing
+            except Exception as e:
+                print(f"Error processing {image}: {e}. Skipping this image.")
+                continue  # Skip to the next image for any other errors
 
         self.loaded_images = np.array(self.loaded_images)
         self.loaded_parsing = np.array(self.loaded_parsing)
@@ -265,7 +280,8 @@ class FashionNN :
             'fabric_output' : 0.3,
             'color_output' : 0.3,
         }
-
+        
+        optimizer = tf.keras.optimizers.Adam(learning_rate)
         # Compile model with loss functions, loss weights, and training metrics
         model = model.compile(
             optimizer=keras.optimizers.Adam(),
@@ -477,4 +493,32 @@ def main():
         return
     
     # Test on dataset
+    try:
+        print("Testing model on user prediction...")
+        results = []
+        test_image_dir = 'test_images'
+        output_dir = "test_results"
+        os.makedirs(output_dir, exist_ok=True)
+        for image in os.listdir(test_image_dir):
+            if image.lower().endswith(('png', 'jpg')):
+                image_path = os.path.join(test_image_dir, image)
+                test_image = Image.open(image_path)
+                predictions = model.predict(test_image)
+                
+                # Store results
+                result = {
+                    'image_name': image,
+                    'predictions': predictions,
+                    'occasions': model.classify_occasion(predictions['predicted clothing type']),
+                    'weather': model.classify_weather(predictions['predicted clothing type'])
+                }
+                results.append(result)
+            # Call other reccomendation types and print outputs
+        return results
     
+    except Exception as e:
+        print("Error during prediction: ", e)
+        return []
+
+if __name__ == "__main__":
+    main()
