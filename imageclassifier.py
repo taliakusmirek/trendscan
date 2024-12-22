@@ -239,7 +239,7 @@ class FashionNN :
         
         # Preprocess training and validation datasets
         train_data = train_data.shuffle(buffer_size=1000).batch(batch_size).prefetch(buffer_size=tf.data.AUTOTUNE) # Shuffle to prevent biased splits
-        val_data = train_data.batch(batch_size).prefetch(buffer_size=tf.data.AUTOTUNE)
+        val_data = val_data.batch(batch_size).prefetch(buffer_size=tf.data.AUTOTUNE)
 
         # Define training metrics...
         train_loss = tf.keras.metrics.Mean(name='train_loss')
@@ -280,7 +280,7 @@ class FashionNN :
 
         # Run, predict, see performance, via a epochs training loop
         # Referene: https://www.tensorflow.org/guide/core/quickstart_core
-        def training_loop(images, targets):
+        def training(images, targets):
             # Calculate loss of each input
             with tf.GradientTape() as tape:
                 predictions = self.call(images)
@@ -308,23 +308,141 @@ class FashionNN :
                 return total_loss
             
         def validation_of_training(images, targets):
-            pass
-                                    
+            predictions = self.call(images)
+
+            # Calculate losses
+            parsing_loss = loss_functions['parsing_output'](targets['parsings'], predictions['parsing_output'])
+            shape_loss = loss_functions['shape_output'](targets['shapes'], predictions['shape_output'])
+            fabric_loss = loss_functions['fabric_output'](targets['fabrics'], predictions['fabric_output'])  
+            color_loss = loss_functions['color_output'](targets['colors'], predictions['color_output'])              
             
-        def predict(self, image):
-            pass
-
-        def evaluate(self, test_data):
-            pass
+            total_loss = ((loss_weights['parsing_output']*parsing_loss) +
+                              (loss_weights['shape_output']*shape_loss) +
+                              (loss_weights['fabric_output']*fabric_loss) +
+                              (loss_weights['color_output']*color_loss))
+            
+            val_loss.update_state(total_loss)
+            return total_loss
         
-        def classify_occasion(self, clothing_type):
-            pass
-    
-        def classify_weather(self, clothing_type):
-            pass
+        # The actual training loop
+        best_val_loss = float('inf')
+        for epoch in range(epochs):
+            # Reset metrics
+            train_loss.reset_states()
+            val_loss.reset_states()
+            parsing_accuracy.reset_states()
+            shape_accuracy.reset_states()
+            fabric_accuracy.reset_states()
+            color_accuracy.reset_states()
 
-        def deploy(self):
-            pass
+            # Training
+            for batch in train_data:
+                images = batch['images']
+                targets = {
+                    'parsings': batch['parsings'],
+                    'shapes': batch['shapes'],
+                    'fabrics': batch['fabrics'],
+                    'colors': batch['colors']
+                }
+                training(images, targets)
+
+            # Validation
+            for batch in val_data:
+                images = batch['images']
+                targets = {
+                    'parsings': batch['parsings'],
+                    'shapes': batch['shapes'],
+                    'fabrics': batch['fabrics'],
+                    'colors': batch['colors']
+                }
+                validation_of_training(images, targets)
+
+            # Metrics
+            template = 'Epoch {}, Loss: {}, Val Loss: {}, Parsing IoU: {}, Shape Acc: {}, Fabric Acc: {}, Color Acc: {}'
+            print(template.format(epoch + 1, train_loss.result(), val_loss.result(), parsing_accuracy.result(), shape_accuracy.result(), fabric_accuracy.result(), color_accuracy.result()))
+        
+            # Stop epochs if we find a maximizing/effective validation loss epoch
+            if val_loss.result() < best_val_loss:
+                best_val_loss = val_loss.result()
+                self.save_weights('best_weights.h5')
+            else:
+                break
+
+    def predict(self, image):
+        image = image.resize((self.img_height, self.img_width))
+        image = np.array(image).astype('float32')/255.0
+        image = np.expand_dims(image, axis=0) # adds batch dimension
+
+        predictions = self.call(image)
+        parsing_mask = tf.argmax(predictions['parsing_output'][0], axis=-1)
+        shape_pred = tf.round(predictions['shape_output'][0])
+        fabric_pred = tf.round(predictions['fabric_output'][0])
+        color_pred = tf.round(predictions['color_output'][0])
+    
+        predicted_clothing_type = np.unique(parsing_mask)
+
+        return {
+            'predicted clothing type': predicted_clothing_type.numpy(),
+            'parsing_mask': parsing_mask.numpy(),
+            'shape': shape_pred.numpy(),
+            'fabric': fabric_pred.numpy(),
+            'color': color_pred.numpy()
+        }
+    
+    def model_evaluate_on_test(self, test_data):
+        test_loss = tf.keras.metrics.Mean(name='test_loss')
+        parsing_accuracy = tf.keras.metrics.MeanIoU(num_classes=self.num_parsing_classes)
+        shape_accuracy = tf.keras.metrics.BinaryAccuracy()
+        fabric_accuracy = tf.keras.metrics.BinaryAccuracy()
+        color_accuracy = tf.keras.metrics.BinaryAccuracy()
+
+        for batch in test_data:
+            predictions = self.call(batch['images'])
+
+            # Get accuracy metrics per batch on each feature
+            parsing_accuracy.update_state(batch['parsings'], predictions['parsing_output'])
+            shape_accuracy.update_state(batch['shapes'], predictions['shape_output'])
+            fabric_accuracy.update_state(batch['fabrics'], predictions['fabric_output'])
+            color_accuracy.update_state(batch['colors'], predictions['color_output'])
+        
+        return {
+            'parsing_accuracy': parsing_accuracy.result().numpy(),
+            'shape_accuracy': shape_accuracy.result().numpy(),
+            'fabric_accuracy': fabric_accuracy.result().numpy(),
+            'color_accuracy': color_accuracy.result().numpy()
+        }
+    
+    def classify_occasion(self, clothing_type):
+        occasion_mappings = {
+            'formal': ['suit', 'dress', 'blazer', 'chinos', 'slacks'],
+            'casual': ['t-shirt', 'jeans', 'sweater', 'skirt', 'shorts'],
+            'sportswear': ['athletic_shorts', 'leggings', 'tank_top', 'tracksuit', 'tennis skirt'],
+            'business_casual': ['khakis', 'polo', 'blouse', 'button-up']
+        }
+        suitable_occasions = []
+        for occasion, clothes in occasion_mappings.items():
+            for item in clothes:
+                if item in clothing_type:
+                    suitable_occasions.append(occasion)
+        
+        return suitable_occasions
+    
+    def classify_weather(self, clothing_type):
+        weather_mappings = {
+            'hot': ['t-shirt', 'shorts', 'tank_top', 'dress'],
+            'cold': ['sweater', 'coat', 'jacket', 'scarf'],
+            'moderate': ['blouse', 'light_jacket', 'jeans'],
+            'rainy': ['raincoat', 'waterproof_jacket', 'boots']
+        }
+        suitable_weather = []
+        for weather, clothes in weather_mappings.items():
+            for item in clothes:
+                if item in clothing_type:
+                    suitable_weather.append(weather)
+        return suitable_weather
+    
+    def deploy(self):
+        pass
 
 
 
@@ -339,3 +457,24 @@ def dice_coefficient(y_true, y_pred):
 
 def dice_loss(y_true, y_pred):
     return 1 - dice_coefficient(y_true, y_pred)
+
+
+
+def main():
+    num_parsing_classes = 21
+    model = FashionNN(num_parsing_classes=num_parsing_classes)
+
+    BATCH_SIZE = 32
+    EPOCHS = 300
+    LEARNING_RATE = 0.001
+
+    # Train model
+    try:
+        print("Starting model training...")
+        model.train(batch_size=BATCH_SIZE, epochs=EPOCHS, learning_rate=LEARNING_RATE)
+    except Exception as e:
+        print("Error during training: ", e)
+        return
+    
+    # Test on dataset
+    
