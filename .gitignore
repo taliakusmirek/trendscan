@@ -161,3 +161,4 @@ cython_debug/
 
 /DeepFashion-MultiModal
 /test_images
+/image_classifier
