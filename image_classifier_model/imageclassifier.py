@@ -26,7 +26,7 @@ class DoubleConv(layers.Layer):
         x = self.relu(x)
         return x
     
-class FashionNN :
+class FashionNN(tf.keras.Model):
     def __init__(self, num_parsing_classes, img_height = 256, img_width = 256):
         super(FashionNN, self).__init__()
         self.img_height = img_height
@@ -280,11 +280,11 @@ class FashionNN :
             'fabric_output' : 0.3,
             'color_output' : 0.3,
         }
-        
-        optimizer = tf.keras.optimizers.Adam(learning_rate)
+
+        optimizer = tf.keras.optimizers.legacy.Adam(learning_rate)
         # Compile model with loss functions, loss weights, and training metrics
-        model = model.compile(
-            optimizer=keras.optimizers.Adam(),
+        self.compile(
+            optimizer=optimizer,
             loss=loss_functions,
             loss_weights= loss_weights,
             metrics = {
@@ -387,7 +387,13 @@ class FashionNN :
     def predict(self, image):
         image = image.resize((self.img_height, self.img_width))
         image = np.array(image).astype('float32')/255.0
-        image = np.expand_dims(image, axis=0) # adds batch dimension
+        # Check if the image has an alpha channel (4 channels: RGBA)
+        if image.shape[-1] == 4:  # RGBA
+            # Convert RGBA to RGB by removing the alpha channel
+            image = image[:, :, :3]
+
+        # Add batch dimension (1, height, width, channels)
+        image = np.expand_dims(image, axis=0)
 
         predictions = self.call(image)
         parsing_mask = tf.argmax(predictions['parsing_output'][0], axis=-1)

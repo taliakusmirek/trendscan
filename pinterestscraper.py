@@ -14,7 +14,8 @@ def get_pinterest_trends(region, trend_type, headers):
             # Export the "keyword" of the Pinterest response that outputs the trending item with our scraped keyword
             pinterest_trends = [trend['keyword'] for trend in data.get('trends', [])]
         else:
-            print('ERROR: Unable to call Pinterest API.')
+            print(f"ERROR: Unable to call Pinterest API. Status code: {response.status_code}")
+            print(f"Response: {response.text}")
             return []
 
             # Store these Pinterest trend words in a list to query as "trend context" for outfit reccomendations later
