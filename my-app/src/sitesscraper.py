@@ -171,8 +171,8 @@ class scrapeSites:
     def close(self):
         self.driver.quit()
     
-if __name__ == "__main__":
-    websites = [
+def main():
+        websites = [
             "https://www.zara.com/us/",
             "https://www.asos.com/us/women/fashion-feed/?ctaref=ww|fashionandbeauty",
             "https://www.aritzia.com/us/en/favourites-1",
@@ -197,6 +197,10 @@ if __name__ == "__main__":
             "https://www.aloyoga.com/collections/new-arrivals",
             "https://www.pullandbear.com/us/woman/new-arrivals-n6491"
     ]
-    scraper = scrapeSites(websites)
-    scraper.scrape_all()
-    scraper.close()
+        scraper = scrapeSites(websites)
+        scraper.scrape_all()
+        scraper.close()
+        return scraper
+
+if __name__ == "__main__":
+    print(json.dumps(main()))
