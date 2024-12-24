@@ -4,16 +4,14 @@ import Link from 'next/link';
 export default function Nav() {
     return (
         <nav className = 'text-brand-Purple'>
-            <div>
+            <div className='flex justify-center -mt-20'>
                 <Link href="/">
-                <Image src="/logo.png" alt="Logo" width={100} height={100} />
+                <Image src="/logo.png" alt="Logo" width={300} height={300} />
                 </Link>
             </div>
-            <ul className='flex justify-center space-x-10'>
-                <li>
-                    <a href="/about" className="text-base-mobile sm:text-base-desktop">about</a>
-                </li>
-            </ul>
+            <p className='flex justify-center -mt-24 text-brand-Purple text-xs mb-10'>
+            Discover the latest top 50 fashion trends in real-time, powered by Pinterest and curated data insights.
+            </p>
         </nav>
     );
  }
