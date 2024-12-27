@@ -2,63 +2,27 @@
 
 **TrendScan** is a web application designed to help users discover the latest fashion trends by aggregating data from multiple sources. It collects trending topics, styles, and products from Pinterest and popular e-commerce clothing sites to give users a real-time view of what's popular in the fashion world. Whether you're looking for inspiration for your next outfit or staying on top of the hottest trends, TrendScan provides the insights you need.
 
-### **Features**  
+## Features
+* Fetch top 50 fashion keywords from Pinterest and e-commerce APIs
+* Track keyword growth over different time frames (weekly, monthly, yearly)
+* API-based data retrieval for real-time trend monitoring
 
-- **Real-Time Trend Aggregation**: Scrapes and aggregates trending fashion topics from various sources like Pinterest and popular e-commerce sites.
-- **Customizable Time Filters**: View the latest trends from the past day, week, or month.
-- **Interactive Web App**: Explore trends via a sleek and user-friendly interface.
-- **Search Functionality**: Search for specific fashion topics, styles, and trends.
-- **Future Integration**: Potential integration with image recognition technology (myCloset) to connect personal wardrobes to trending styles.
+## Tech Stack
+* Frontend: React (Next.js)
+* Backend: Node.js, Express.js
+* APIs: Pinterest API, e-commerce APIs
 
-### **Tech Stack**  
+## How to Get Started
+Clone the repo:
+`git clone https://github.com/taliakusmirek/TrendScan.git`
+Install dependencies:
+`npm install`
+Set up your API keys for Pinterest and e-commerce APIs in `.env`
+Run the app:
+`npm run dev`
+Open `http://localhost:3000` in your browser
 
-- **Frontend**:  
-  - **Next.js**: Framework for server-side rendering and fast development of React-based apps.
-  - **Tailwind CSS**: Utility-first CSS framework for fast, responsive design.
-
-- **Backend**:  
-  - **Node.js**: JavaScript runtime for handling API requests and server-side logic.
-  - **Express.js**: Web framework for Node.js for API routing and handling.
-  - **Supabase**: Backend-as-a-Service (BaaS) for real-time databases and authentication.
-
-- **Data Sources**:  
-  - **Pinterest API**: To collect trending fashion-related data.
-  - **Web Scraping (via BeautifulSoup)**: For scraping additional fashion websites, blogs, and e-commerce stores.
-
-- **Deployment**:  
-  - **Vercel**: For hosting the frontend application.
-  - **Supabase**: For user data and real-time trend data storage.
-
-### **How to Get Started**
-
-1. **Clone the repository**:  
-   ```bash
-   git clone https://github.com/taliakusmirek/TrendScan.git
-   cd trendscan
-   ```
-
-2. **Install dependencies**:  
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables**:  
-   - Create a `.env` file in the root of the project and add your API keys for Pinterest and Instagram.
-
-   Example:  
-   ```env
-   PINTEREST_KEY=your_pinterest_api_key
-   ```
-
-4. **Run the development server**:  
-   ```bash
-   npm run dev
-   ```
-
-5. **Access the app**:  
-   Navigate to `http://localhost:3000` in your browser.
-
-### **Future Features**
+### **Future Possible Features**
 
 - **Image Recognition Integration**: Connect with **myCloset** to provide personalized recommendations based on your closet’s content.
 - **User Profiles**: Allow users to save their favorite trends, outfits, and fashion inspirations.
