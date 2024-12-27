@@ -28,15 +28,6 @@ export default async function handler(req, res){
             res.status(500).json({ error: "An unexpected server-side error occurred." });
         }
     } else {
-        res.status(405).json({ error: "Method not allowed. Use GET instead." });
+        res.status(405).json({ error: "Method not allowed." });
     }
-
-    return (
-        <div>
-            <h1>Trending Keywords</h1>
-            <ul>
-                
-            </ul>
-        </div>
-    );
 }

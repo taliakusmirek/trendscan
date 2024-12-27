@@ -6,12 +6,18 @@ export default NextAuth({
     PinterestProvider({
       clientId: process.env.PINTEREST_ID,
       clientSecret: process.env.PINTEREST_SECRET,
-      authorization: "https://api.pinterest.com/oauth/",
+      authorization: {
+        url: "https://www.pinterest.com/oauth/",
+        params: {
+          response_type: "code",
+          redirect_uri: "http://localhost:3000/api/auth/callback/pinterest", 
+          scope: "boards:read,pins:read,catalogs:read", 
+        },
+      },
       token: "https://api.pinterest.com/v5/oauth/token",
       userinfo: {
         url: "https://api.pinterest.com/v5/user_account",
       },
-      scope: "ads:read, boards:read, pins:read, catalogs:read",
     }),
   ],
   callbacks: {
@@ -24,6 +30,9 @@ export default NextAuth({
     async session({ session, token }) {
       session.accessToken = token.accessToken;
       return session;
+    },
+    async redirect({ url, baseUrl }) {
+      return baseUrl; 
     },
   },
 });
