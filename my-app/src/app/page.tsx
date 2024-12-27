@@ -10,6 +10,7 @@ export default function Home() {
   const [keywords, setKeywords] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true); // Track loading state
+  const [trends, setTrends] = useState<any[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -36,12 +37,32 @@ export default function Home() {
           setLoading(false); 
         }
       }
+      
+      async function fetchTrends() {
+        try {
+          const response = await fetch("/api/trends");
+          if (!response.ok) throw new Error("Failed to fetch Pinterest trends data.");
+          const data = await response.json();
+          setTrends(data.trends || []);
+        } catch (err) {
+          if (err instanceof Error) {
+            setError(err.message);
+          } else {
+            setError("An unknown error occurred.");
+          }
+        } finally {
+          setLoading(false); 
+        }
+      }
+
       fetchKeywords();
+      fetchTrends();
+
     }
   }, [session]); 
   
   return (
-    <div className="flex items-center justify-center min-h-screen">
+    <div className="flex flex-col items-center justify-center">
       <div className="text-center">
         <Nav />
         <main>
@@ -60,10 +81,11 @@ export default function Home() {
               Signout of Pinterest
             </button>
           )}
-
-          <h1 className="mt-16 text-2xl font-bold">Trending Keywords</h1>
+      <div className="mt-20 flex flex-row flex-wrap gap-8 justify-center w-full">
+        <div className="w-1/2">
+          <h1 className="mt-16 text-2xl font-bold text-purple-900">E-Commerce Insights</h1>
           {loading ? (
-            <p className="mt-2 text-purple-500">Currently getting keywords...standby</p>
+            <p className="mt-2 text-purple-500">...</p>
           ) : error ? (
             <p className="mt-2 text-red-500">Error: {error}</p>
           ) : (
@@ -75,6 +97,28 @@ export default function Home() {
               ))}
             </ul>
           )}
+        </div>
+
+        <div className="w-1/2">
+        <h1 className="mt-16 text-2xl font-bold text-purple-900">Pinterest Insights</h1>
+          {loading ? (
+            <p className="mt-2 text-purple-500">...</p>
+          ) : error ? (
+            <p className="mt-2 text-red-500">Error: {error}</p>
+          ) : (
+            <ul className="mt-4">
+              {trends.map((trend, index) => (
+                <li key={index} className="mt-2 text-purple-800">
+                  <h2 className="font-bold text-sm text-purple-500">{trend.keyword}</h2>
+                  <p className="text-purple-400">Weekly Growth: {trend.pct_growth_wow}%</p>
+                  <p className="text-purple-400">Monthly Growth: {trend.pct_growth_mom}%</p>
+                  <p className="text-purple-400">Yearly Growth: {trend.pct_growth_yoy}%</p>
+                </li>
+              ))}
+            </ul>
+          )}
+      </div>
+      </div>
         </main>
         <Footer />
       </div>
